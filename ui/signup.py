@@ -1,11 +1,85 @@
 import tkinter as tk
 from tkinter import Entry, Label, Button
-from PIL import Image, ImageTk
+from tkinter import messagebox
+import mysql.connector
+import hashlib
+import subprocess  # To open login.py
 
-# Initialize main window
+# ------------------- Database Connection -------------------
+def connect_db():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",  # Replace with your MySQL username
+        password="your_password",  # Replace with your MySQL password
+        database="library_system"  # Replace with your database name
+    )
+
+# ------------------- Password Hashing -------------------
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ------------------- Sign Up Function -------------------
+def signup_user():
+    full_name = full_name_entry.get()
+    email = email_entry.get()
+    password = password_entry.get()
+    confirm_password = confirm_password_entry.get()
+
+    # Check if any fields are empty
+    if not full_name or not email or not password or not confirm_password:
+        messagebox.showwarning("Input Error", "All fields are required.")
+        return
+
+    # Check if passwords match
+    if password != confirm_password:
+        messagebox.showwarning("Password Error", "Passwords do not match.")
+        return
+
+    # Hash the password
+    hashed_password = hash_password(password)
+
+    try:
+        connection = connect_db()
+        cursor = connection.cursor()
+
+        # Check if email already exists
+        cursor.execute("SELECT * FROM Users WHERE email = %s", (email,))
+        existing_user = cursor.fetchone()
+        if existing_user:
+            messagebox.showwarning("Email Error", "Email already exists. Please use a different email.")
+            return
+
+        # Insert the user data into the database
+        cursor.execute(
+            "INSERT INTO Users (full_name, email, password) VALUES (%s, %s, %s)",
+            (full_name, email, hashed_password)
+        )
+
+        connection.commit()
+        messagebox.showinfo("Success", "User registered successfully!")
+        
+        # After successful registration, redirect to login page
+        open_login_page()
+
+    except mysql.connector.Error as err:
+        messagebox.showerror("Database Error", str(err))
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
+
+# ------------------- Open Login Page -------------------
+def open_login_page():
+    try:
+        subprocess.Popen(["python", "login.py"])  # Open login.py when Sign Up is clicked
+        root.quit()  # Close the signup window
+    except Exception as e:
+        messagebox.showerror("Error", f"Unable to open login page: {e}")
+
+# ----------------- Setup -----------------
 root = tk.Tk()
 root.title("Library Sign-Up")
-root.geometry("850x500")
+root.geometry("850x500")  
 root.configure(bg="#0D3B17")  # Dark green background
 
 # ---------------- Background Frame ---------------- #
@@ -54,7 +128,7 @@ confirm_password_entry.place(x=450, y=270)
 
 # ---------------- Sign-Up Button ---------------- #
 signup_button = Button(signup_frame, text="  👤 Sign Up", font=("Arial", 10, "bold"), bg="green", fg="white",
-                      bd=0, width=32, height=1)
+                      bd=0, width=32, height=1, command=signup_user)
 signup_button.place(x=450, y=300)
 
 # ---------------- Already have an account? Login ---------------- #
@@ -71,6 +145,9 @@ try:
     img_label.place(x=40, y=120)
 except:
     print("Image not found. Make sure 'library_illustration.png' is in the correct path.")
+
+# Bind Login label to open login.py
+login_label.bind("<Button-1>", lambda e: open_login_page())  # Open the login page when clicked
 
 # Run Tkinter main loop
 root.mainloop()
