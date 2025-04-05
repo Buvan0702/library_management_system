@@ -1,16 +1,22 @@
 import tkinter as tk
-from tkinter import Entry, Label, Button
 from tkinter import messagebox
+import customtkinter as ctk
+from PIL import Image, ImageTk
 import mysql.connector
 import hashlib
-import subprocess  # To open login.py
+import os
+import re
+
+# Set appearance mode and default color theme for CustomTkinter
+ctk.set_appearance_mode("light")  # Modes: "System", "Dark", "Light"
+ctk.set_default_color_theme("green")  # Themes: "blue", "green", "dark-blue"
 
 # ------------------- Database Connection -------------------
 def connect_db():
     return mysql.connector.connect(
         host="localhost",
         user="root",  # Replace with your MySQL username
-        password="your_password",  # Replace with your MySQL password
+        password="new_password",  # Replace with your MySQL password
         database="library_system"  # Replace with your database name
     )
 
@@ -18,16 +24,26 @@ def connect_db():
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+# ------------------- Email Validation -------------------
+def is_valid_email(email):
+    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return re.match(pattern, email) is not None
+
 # ------------------- Sign Up Function -------------------
 def signup_user():
-    full_name = full_name_entry.get()
-    email = email_entry.get()
+    full_name = full_name_entry.get().strip()
+    email = email_entry.get().strip()
     password = password_entry.get()
     confirm_password = confirm_password_entry.get()
 
     # Check if any fields are empty
     if not full_name or not email or not password or not confirm_password:
         messagebox.showwarning("Input Error", "All fields are required.")
+        return
+
+    # Validate email format
+    if not is_valid_email(email):
+        messagebox.showwarning("Email Error", "Please enter a valid email address.")
         return
 
     # Check if passwords match
@@ -49,10 +65,15 @@ def signup_user():
             messagebox.showwarning("Email Error", "Email already exists. Please use a different email.")
             return
 
+        # Split full name into first and last name (best effort)
+        name_parts = full_name.split()
+        first_name = name_parts[0] if name_parts else ""
+        last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
         # Insert the user data into the database
         cursor.execute(
-            "INSERT INTO Users (full_name, email, password) VALUES (%s, %s, %s)",
-            (full_name, email, hashed_password)
+            "INSERT INTO Users (first_name, last_name, email, password, role) VALUES (%s, %s, %s, %s, %s)",
+            (first_name, last_name, email, hashed_password, "member")
         )
 
         connection.commit()
@@ -64,90 +85,190 @@ def signup_user():
     except mysql.connector.Error as err:
         messagebox.showerror("Database Error", str(err))
     finally:
-        if connection.is_connected():
+        if 'connection' in locals() and connection.is_connected():
             cursor.close()
             connection.close()
 
 # ------------------- Open Login Page -------------------
 def open_login_page():
     try:
-        subprocess.Popen(["python", "login.py"])  # Open login.py when Sign Up is clicked
-        root.quit()  # Close the signup window
+        root.destroy()
+        os.system("python login.py")
     except Exception as e:
         messagebox.showerror("Error", f"Unable to open login page: {e}")
 
-# ----------------- Setup -----------------
-root = tk.Tk()
-root.title("Library Sign-Up")
-root.geometry("850x500")  
-root.configure(bg="#0D3B17")  # Dark green background
+# ----------------- Setup Main Window -----------------
+root = ctk.CTk()
+root.title("Library Management System - Sign Up")
+root.geometry("1200x800")
+root.resizable(False, False)
 
-# ---------------- Background Frame ---------------- #
-background_frame = tk.Frame(root, bg="#1B8D3D", width=830, height=480, bd=2, relief="flat")
-background_frame.place(relx=0.5, rely=0.5, anchor="center")
+# Create main frame with rounded corners
+main_frame = ctk.CTkFrame(root, fg_color="white", corner_radius=15, border_width=2, border_color="#15aa3e")
+main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-# ---------------- Sign-Up Card ---------------- #
-signup_frame = tk.Frame(background_frame, bg="white", width=780, height=380, bd=2, relief="flat")
-signup_frame.place(relx=0.5, rely=0.5, anchor="center")
+# Create two columns (left for image, right for signup form)
+left_frame = ctk.CTkFrame(main_frame, fg_color="white", corner_radius=0)
+left_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
-# ---------------- Sign-Up Title ---------------- #
-title_label = Label(signup_frame, text="Create an Account", font=("Arial", 14, "bold"), bg="white", fg="green")
-title_label.place(x=450, y=30)
+right_frame = ctk.CTkFrame(main_frame, fg_color="white", corner_radius=0)
+right_frame.pack(side="right", fill="both", expand=True, padx=40, pady=40)
 
-subtitle_label = Label(signup_frame, text="Sign up to explore books, borrow items, and manage your library\naccount.",
-                        font=("Arial", 9), bg="white", fg="gray", justify="left")
-subtitle_label.place(x=450, y=55)
+# Add signup heading to the right frame
+heading_label = ctk.CTkLabel(
+    right_frame, 
+    text="Create an Account", 
+    font=ctk.CTkFont(family="Arial", size=30, weight="bold"),
+    text_color="#15aa3e"
+)
+heading_label.pack(pady=(20, 10))
 
-# ---------------- Full Name Entry ---------------- #
-full_name_label = Label(signup_frame, text="Full Name", font=("Arial", 10, "bold"), bg="white")
-full_name_label.place(x=450, y=100)
+# Add descriptive text
+desc_text = "Sign up to explore books, borrow items, and manage your library account."
+desc_label = ctk.CTkLabel(
+    right_frame,
+    text=desc_text,
+    font=ctk.CTkFont(family="Arial", size=12),
+    text_color="gray"
+)
+desc_label.pack(pady=(0, 30))
 
-full_name_entry = Entry(signup_frame, font=("Arial", 10), bd=1, relief="solid", width=35)
-full_name_entry.place(x=450, y=120)
+# Full Name Entry
+full_name_label = ctk.CTkLabel(
+    right_frame,
+    text="Full Name",
+    font=ctk.CTkFont(family="Arial", size=14, weight="bold"),
+    text_color="#333333",
+    anchor="w"
+)
+full_name_label.pack(anchor="w", pady=(0, 5))
 
-# ---------------- Email Entry ---------------- #
-email_label = Label(signup_frame, text="Email Address", font=("Arial", 10, "bold"), bg="white")
-email_label.place(x=450, y=150)
+full_name_entry = ctk.CTkEntry(
+    right_frame,
+    width=350,
+    height=40,
+    font=ctk.CTkFont(family="Arial", size=13),
+    border_width=1,
+    corner_radius=5,
+    placeholder_text=" "
+)
+full_name_entry.pack(pady=(0, 15))
 
-email_entry = Entry(signup_frame, font=("Arial", 10), bd=1, relief="solid", width=35)
-email_entry.place(x=450, y=170)
+# Email Entry
+email_label = ctk.CTkLabel(
+    right_frame,
+    text="Email Address",
+    font=ctk.CTkFont(family="Arial", size=14, weight="bold"),
+    text_color="#333333",
+    anchor="w"
+)
+email_label.pack(anchor="w", pady=(0, 5))
 
-# ---------------- Password Entry ---------------- #
-password_label = Label(signup_frame, text="Password", font=("Arial", 10, "bold"), bg="white")
-password_label.place(x=450, y=200)
+email_entry = ctk.CTkEntry(
+    right_frame,
+    width=350,
+    height=40,
+    font=ctk.CTkFont(family="Arial", size=13),
+    border_width=1,
+    corner_radius=5,
+    placeholder_text=" "
+)
+email_entry.pack(pady=(0, 15))
 
-password_entry = Entry(signup_frame, font=("Arial", 10), bd=1, relief="solid", width=35, show="*")
-password_entry.place(x=450, y=220)
+# Password Entry
+password_label = ctk.CTkLabel(
+    right_frame,
+    text="Password",
+    font=ctk.CTkFont(family="Arial", size=14, weight="bold"),
+    text_color="#333333",
+    anchor="w"
+)
+password_label.pack(anchor="w", pady=(0, 5))
 
-# ---------------- Confirm Password Entry ---------------- #
-confirm_password_label = Label(signup_frame, text="Confirm Password", font=("Arial", 10, "bold"), bg="white")
-confirm_password_label.place(x=450, y=250)
+password_entry = ctk.CTkEntry(
+    right_frame,
+    width=350,
+    height=40,
+    font=ctk.CTkFont(family="Arial", size=13),
+    border_width=1,
+    corner_radius=5,
+    placeholder_text=" ",
+    show="•"
+)
+password_entry.pack(pady=(0, 15))
 
-confirm_password_entry = Entry(signup_frame, font=("Arial", 10), bd=1, relief="solid", width=35, show="*")
-confirm_password_entry.place(x=450, y=270)
+# Confirm Password Entry
+confirm_password_label = ctk.CTkLabel(
+    right_frame,
+    text="Confirm Password",
+    font=ctk.CTkFont(family="Arial", size=14, weight="bold"),
+    text_color="#333333",
+    anchor="w"
+)
+confirm_password_label.pack(anchor="w", pady=(0, 5))
 
-# ---------------- Sign-Up Button ---------------- #
-signup_button = Button(signup_frame, text="  👤 Sign Up", font=("Arial", 10, "bold"), bg="green", fg="white",
-                      bd=0, width=32, height=1, command=signup_user)
-signup_button.place(x=450, y=300)
+confirm_password_entry = ctk.CTkEntry(
+    right_frame,
+    width=350,
+    height=40,
+    font=ctk.CTkFont(family="Arial", size=13),
+    border_width=1,
+    corner_radius=5,
+    placeholder_text=" ",
+    show="•"
+)
+confirm_password_entry.pack(pady=(0, 25))
 
-# ---------------- Already have an account? Login ---------------- #
-login_label = Label(signup_frame, text="🔗 Already have an account? Login here", font=("Arial", 9, "bold"),
-                     bg="white", fg="green", cursor="hand2")
-login_label.place(x=450, y=340)
+# Sign Up Button
+signup_button = ctk.CTkButton(
+    right_frame,
+    text="Sign Up",
+    font=ctk.CTkFont(family="Arial", size=14, weight="bold"),
+    corner_radius=5,
+    height=45,
+    width=350,
+    fg_color="#15aa3e",
+    hover_color="#0d7f2f",
+    text_color="white",
+    command=signup_user
+)
+signup_button.pack(pady=(5, 15))
 
-# ---------------- Illustration Image ---------------- #
+# Already have an account link
+login_link = ctk.CTkButton(
+    right_frame,
+    text="Already have an account? Login here",
+    font=ctk.CTkFont(family="Arial", size=12),
+    fg_color="transparent",
+    hover_color="#f0f0f0",
+    text_color="#15aa3e",
+    width=30,
+    command=open_login_page
+)
+login_link.pack(pady=(5, 0))
+
+# Try to load the illustration image for the left side
 try:
-    image = Image.open("library_illustration.png")  # Load an image (Use an appropriate path)
-    image = image.resize((250, 200))
-    img = ImageTk.PhotoImage(image)
-    img_label = Label(signup_frame, image=img, bg="white")
-    img_label.place(x=40, y=120)
-except:
-    print("Image not found. Make sure 'library_illustration.png' is in the correct path.")
+    # Load and resize the image
+    image_path = "library.png"  # Replace with your image path
+    pil_image = Image.open(image_path)
+    pil_image = pil_image.resize((600, 600))
+    img = ImageTk.PhotoImage(pil_image)
+    
+    # Create image label
+    image_label = tk.Label(left_frame, image=img, bg="white")
+    image_label.image = img  # Keep a reference to avoid garbage collection
+    image_label.pack(pady=50)
+except Exception as e:
+    # If image loading fails, display a placeholder text
+    print(f"Error loading image: {e}")
+    placeholder = ctk.CTkLabel(
+        left_frame,
+        text="Library\nManagement\nSystem",
+        font=ctk.CTkFont(family="Arial", size=32, weight="bold"),
+        text_color="#15aa3e"
+    )
+    placeholder.pack(expand=True)
 
-# Bind Login label to open login.py
-login_label.bind("<Button-1>", lambda e: open_login_page())  # Open the login page when clicked
-
-# Run Tkinter main loop
+# Start the application
 root.mainloop()
